@@ -74,12 +74,12 @@ Example response (trimmed):
 
 `ccache` is used for C++ engine compilation inside Docker build stages. The local CMake preset also defaults `CCACHE_DIR` to `.ccache` at the repository root.
 
-If your machine is memory constrained, reduce parallel compile jobs in `infra/env/routing.env`:
+If your machine is memory constrained, reduce parallel compile jobs in `deploy/env/http-server.arm64.env`:
 
 - `OSRM_BUILD_JOBS=1`
 - `VROOM_BUILD_JOBS=1`
 
-Default dev map data is `monaco-latest.osm.pbf` for fast startup. Set `OSRM_PBF_URL` in `infra/env/routing.env` for your target delivery region.
+Default dev map data is `california-latest.osm.pbf`. Set `OSRM_PBF_URL` in `deploy/env/http-server.arm64.env` for your target delivery region.
 
 ## Acceptance Check
 
@@ -91,7 +91,7 @@ curl -f http://localhost:5050/health
 
 Expected: HTTP `200` and JSON with `"status":"ok"`.
 
-If port `5000` is free on your machine and you want that exact endpoint, set `OSRM_PUBLIC_PORT=5000` in `infra/env/routing.env`.
+If port `5000` is free on your machine and you want OSRM on that exact endpoint, set `DELIVERYOPTIMIZER_OSRM_HOST_PORT=5000` in `deploy/env/http-server.arm64.env`.
 # Delivery Optimizer UI
 
 Frontend application for optimizing delivery routes.
