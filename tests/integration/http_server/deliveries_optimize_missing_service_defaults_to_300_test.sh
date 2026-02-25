@@ -60,7 +60,11 @@ server_pid=$!
 
 ready=false
 for _ in $(seq 1 50); do
+<<<<<<< HEAD
   if "${curl_bin}" -fsS "http://127.0.0.1:${port}/optimize?deliveries=1&vehicles=1" >/dev/null 2>&1; then
+=======
+  if "${curl_bin}" -fsS "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
+>>>>>>> 248ebf1 (test: add failing contract tests for migration regressions)
     ready=true
     break
   fi
