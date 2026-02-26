@@ -236,7 +236,6 @@ ParseNonNegativeEpochSeconds(const Json::Value& value) {
 
   return windows;
 }
-
 [[nodiscard]] std::optional<Json::UInt64> ParsePositiveId(const Json::Value& value) {
   if (value.isUInt64()) {
     const Json::UInt64 parsed = value.asUInt64();
@@ -501,7 +500,6 @@ void ParseJobs(const Json::Value& root, OptimizeRequestInput& parsed_input, Json
   }
   return values;
 }
-
 [[nodiscard]] Json::Value BuildVroomInput(const OptimizeRequestInput& input) {
   Json::Value payload{Json::objectValue};
   payload["jobs"] = Json::Value{Json::arrayValue};
