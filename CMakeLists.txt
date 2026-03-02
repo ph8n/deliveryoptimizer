@@ -35,12 +35,29 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS AND NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_
     message(
       WARNING
       "Failed to create compile_commands.json symlink: ${create_compile_commands_symlink_error}. "
-      "Falling back to copying the file."
+      "Falling back to a build-time copy."
     )
-    execute_process(
-      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-              "${CMAKE_BINARY_DIR}/compile_commands.json"
-              "${CMAKE_SOURCE_DIR}/compile_commands.json"
+    set(deliveryoptimizer_copy_compile_commands_script
+        "${CMAKE_BINARY_DIR}/copy_compile_commands.cmake")
+    file(
+      WRITE "${deliveryoptimizer_copy_compile_commands_script}"
+      "if(EXISTS \"${CMAKE_BINARY_DIR}/compile_commands.json\")\n"
+      "  execute_process(\n"
+      "    COMMAND \"${CMAKE_COMMAND}\" -E copy_if_different\n"
+      "            \"${CMAKE_BINARY_DIR}/compile_commands.json\"\n"
+      "            \"${CMAKE_SOURCE_DIR}/compile_commands.json\"\n"
+      "    RESULT_VARIABLE copy_compile_commands_result\n"
+      "  )\n"
+      "  if(NOT copy_compile_commands_result EQUAL 0)\n"
+      "    message(FATAL_ERROR \"Failed to copy compile_commands.json to source directory.\")\n"
+      "  endif()\n"
+      "endif()\n"
+    )
+    add_custom_target(
+      copy_compile_commands ALL
+      COMMAND "${CMAKE_COMMAND}" -P "${deliveryoptimizer_copy_compile_commands_script}"
+      COMMENT "Copying compile_commands.json to source directory"
+      VERBATIM
     )
   endif()
 endif()
