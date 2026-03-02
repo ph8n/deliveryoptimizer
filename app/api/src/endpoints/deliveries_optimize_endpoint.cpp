@@ -1,5 +1,8 @@
 #include "deliveryoptimizer/api/endpoints/deliveries_optimize_endpoint.hpp"
 
+#include <chrono>
+#include <cerrno>
+#include <csignal>
 #include <cstdlib>
 #include <drogon/drogon.h>
 #include <filesystem>
@@ -13,6 +16,8 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -24,6 +29,7 @@ constexpr std::string_view kDefaultVroomRouter = "osrm";
 constexpr std::string_view kDefaultVroomHost = "osrm";
 constexpr std::string_view kDefaultVroomPort = "5001";
 constexpr std::string_view kDefaultVroomTimeoutSeconds = "30";
+constexpr int kDefaultVroomTimeoutSecondsInt = 30;
 constexpr int kDefaultJobServiceSeconds = 300;
 
 struct Coordinate {
@@ -514,19 +520,18 @@ void ApplyExternalIdsToUnassigned(Json::Value& unassigned,
   return std::string{raw_value};
 }
 
-[[nodiscard]] std::string ShellEscape(const std::string& value) {
-  std::string escaped;
-  escaped.reserve(value.size() + 2U);
-  escaped.push_back('\'');
-  for (const char character : value) {
-    if (character == '\'') {
-      escaped += "'\\''";
-    } else {
-      escaped.push_back(character);
+[[nodiscard]] int ParsePositiveIntOrDefault(const std::string_view value,
+                                            const int default_value) {
+  try {
+    const long long parsed = std::stoll(std::string{value});
+    if (parsed > 0 && parsed <= static_cast<long long>(std::numeric_limits<int>::max())) {
+      return static_cast<int>(parsed);
     }
+  } catch (const std::exception&) {
+    return default_value;
   }
-  escaped.push_back('\'');
-  return escaped;
+
+  return default_value;
 }
 
 [[nodiscard]] std::optional<Json::Value> ParseJson(const std::string_view input) {
@@ -579,13 +584,66 @@ void ApplyExternalIdsToUnassigned(Json::Value& unassigned,
   const std::string vroom_timeout =
       ResolveEnvOrDefault("VROOM_TIMEOUT_SECONDS", kDefaultVroomTimeoutSeconds);
 
-  const std::string command = ShellEscape(vroom_bin) + " --router " + ShellEscape(vroom_router) +
-                              " --host " + ShellEscape(vroom_host) + " --port " +
-                              ShellEscape(vroom_port) + " --limit " + ShellEscape(vroom_timeout) +
-                              " --input " + ShellEscape(input_file->path()) + " --output " +
-                              ShellEscape(output_file->path());
-  const int command_status = std::system(command.c_str());
-  if (command_status != 0) {
+  const int vroom_timeout_seconds =
+      ParsePositiveIntOrDefault(vroom_timeout, kDefaultVroomTimeoutSecondsInt);
+
+  std::vector<std::string> args{
+      vroom_bin,
+      "--router",
+      vroom_router,
+      "--host",
+      vroom_host,
+      "--port",
+      vroom_port,
+      "--limit",
+      std::to_string(vroom_timeout_seconds),
+      "--input",
+      input_file->path(),
+      "--output",
+      output_file->path(),
+  };
+  std::vector<char*> argv;
+  argv.reserve(args.size() + 1U);
+  for (auto& arg : args) {
+    argv.push_back(const_cast<char*>(arg.c_str()));
+  }
+  argv.push_back(nullptr);
+
+  const pid_t child_pid = ::fork();
+  if (child_pid == -1) {
+    return std::nullopt;
+  }
+
+  if (child_pid == 0) {
+    ::execv(args[0].c_str(), argv.data());
+    _exit(127);
+  }
+
+  int wait_status = 0;
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(vroom_timeout_seconds + 1);
+  while (true) {
+    const pid_t wait_result = ::waitpid(child_pid, &wait_status, WNOHANG);
+    if (wait_result == child_pid) {
+      break;
+    }
+    if (wait_result == -1) {
+      if (errno == EINTR) {
+        continue;
+      }
+      return std::nullopt;
+    }
+
+    if (std::chrono::steady_clock::now() >= deadline) {
+      (void)::kill(child_pid, SIGKILL);
+      (void)::waitpid(child_pid, &wait_status, 0);
+      return std::nullopt;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+
+  if (!WIFEXITED(wait_status) || WEXITSTATUS(wait_status) != 0) {
     return std::nullopt;
   }
 
@@ -667,7 +725,6 @@ void RegisterDeliveriesOptimizeEndpoint(drogon::HttpAppFramework& app) {
                         ApplyExternalIdsToUnassigned(unassigned, job_map);
                         body["routes"] = std::move(routes);
                         body["unassigned"] = std::move(unassigned);
-                        body["raw"] = *vroom_output;
 
                         std::move(callback)(drogon::HttpResponse::newHttpJsonResponse(body));
                       },
