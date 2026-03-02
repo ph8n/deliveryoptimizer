@@ -41,36 +41,137 @@ if(DELIVERYOPTIMIZER_ENABLE_WARNINGS)
   deliveryoptimizer_set_warnings(deliveryoptimizer_tests)
 endif()
 
-gtest_discover_tests(deliveryoptimizer_tests DISCOVERY_TIMEOUT 30)
+gtest_discover_tests(
+  deliveryoptimizer_tests
+  DISCOVERY_TIMEOUT 30
+  PROPERTIES
+    LABELS "unit"
+)
 
 find_program(BASH_PROGRAM bash REQUIRED)
 find_program(CURL_PROGRAM curl REQUIRED)
 find_program(DOCKER_PROGRAM docker)
 
-add_test(
-  NAME DeliveryOptimizerApiTest.HealthAndOptimize
-  COMMAND "${BASH_PROGRAM}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/http_server/health_and_optimize_test.sh"
-          "$<TARGET_FILE:deliveryoptimizer_api>" "${CURL_PROGRAM}"
-)
-set_tests_properties(DeliveryOptimizerApiTest.HealthAndOptimize PROPERTIES TIMEOUT 30)
+set(DELIVERYOPTIMIZER_LOCAL_API_LABELS "integration;api;local")
+set(DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS "integration;api;local;regression")
 
-add_test(
-  NAME DeliveryOptimizerApiValidationTest.OptimizeRejectsNegativeDeliveries
-  COMMAND "${BASH_PROGRAM}"
-          "${CMAKE_CURRENT_SOURCE_DIR}/integration/http_server/optimize_rejects_negative_deliveries_test.sh"
-          "$<TARGET_FILE:deliveryoptimizer_api>" "${CURL_PROGRAM}"
-)
-set_tests_properties(DeliveryOptimizerApiValidationTest.OptimizeRejectsNegativeDeliveries PROPERTIES TIMEOUT 30)
+function(deliveryoptimizer_add_local_http_test test_name script_name timeout_seconds labels)
+  add_test(
+    NAME ${test_name}
+    COMMAND "${BASH_PROGRAM}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/http_server/${script_name}"
+            "$<TARGET_FILE:deliveryoptimizer_api>" "${CURL_PROGRAM}"
+  )
+  set_tests_properties(
+    ${test_name}
+    PROPERTIES
+      TIMEOUT ${timeout_seconds}
+      LABELS "${labels}"
+  )
+endfunction()
 
-add_test(
-  NAME DeliveryOptimizerApiValidationTest.OptimizeRejectsExcessiveDeliveries
-  COMMAND "${BASH_PROGRAM}"
-          "${CMAKE_CURRENT_SOURCE_DIR}/integration/http_server/optimize_rejects_excessive_deliveries_test.sh"
-          "$<TARGET_FILE:deliveryoptimizer_api>" "${CURL_PROGRAM}"
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiTest.HealthAndOptimize
+  health_and_optimize_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_LABELS}"
 )
-set_tests_properties(DeliveryOptimizerApiValidationTest.OptimizeRejectsExcessiveDeliveries PROPERTIES TIMEOUT 30)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiValidationTest.OptimizeRejectsNegativeDeliveries
+  optimize_rejects_negative_deliveries_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiValidationTest.OptimizeRejectsExcessiveDeliveries
+  optimize_rejects_excessive_deliveries_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiContractTest.DeliveriesOptimizePreservesVehicleStartEnd
+  deliveries_optimize_preserves_vehicle_start_end_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiContractTest.DeliveriesOptimizeResponseIncludesExternalIds
+  deliveries_optimize_response_includes_external_ids_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiContractTest.HealthReportsDependencyReadiness
+  health_reports_dependency_readiness_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiContractTest.DeliveriesOptimizeMissingServiceDefaultsTo300
+  deliveries_optimize_missing_service_defaults_to_300_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiRegressionTest.DeliveriesOptimizeEnforcesSolverTimeout
+  deliveries_optimize_enforces_solver_timeout_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiRegressionTest.DeliveriesOptimizePreservesVehicleTimeWindow
+  deliveries_optimize_preserves_vehicle_time_window_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiRegressionTest.DeliveriesOptimizePreservesJobTimeWindows
+  deliveries_optimize_preserves_job_time_windows_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiRegressionTest.DeliveriesOptimizeRejectsOutOfRangeCoordinates
+  deliveries_optimize_rejects_out_of_range_coordinates_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS}"
+)
 
 if(DOCKER_PROGRAM)
+  set(DELIVERYOPTIMIZER_E2E_ENV_FILE "${CMAKE_SOURCE_DIR}/tests/integration/e2e/e2e_stack.env")
+  set(DELIVERYOPTIMIZER_E2E_COMPOSE_FILE "${CMAKE_SOURCE_DIR}/deploy/compose/docker-compose.arm64.yml")
+
+  function(deliveryoptimizer_add_docker_e2e_test test_name script_name timeout_seconds)
+    add_test(
+      NAME ${test_name}
+      COMMAND "${BASH_PROGRAM}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/e2e/${script_name}"
+              "${DELIVERYOPTIMIZER_E2E_ENV_FILE}" "${DELIVERYOPTIMIZER_E2E_COMPOSE_FILE}"
+              "${DOCKER_PROGRAM}" "${CURL_PROGRAM}"
+    )
+    set_tests_properties(
+      ${test_name}
+      PROPERTIES
+        RUN_SERIAL TRUE
+        TIMEOUT ${timeout_seconds}
+        LABELS "e2e;docker"
+    )
+  endfunction()
+
+  function(deliveryoptimizer_add_docker_api_e2e_test test_name script_name timeout_seconds)
+    add_test(
+      NAME ${test_name}
+      COMMAND "${BASH_PROGRAM}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/e2e/${script_name}"
+              "${DELIVERYOPTIMIZER_E2E_ENV_FILE}" "${DELIVERYOPTIMIZER_E2E_COMPOSE_FILE}"
+              "${DOCKER_PROGRAM}" "${CURL_PROGRAM}"
+    )
+    set_tests_properties(
+      ${test_name}
+      PROPERTIES
+        RUN_SERIAL TRUE
+        TIMEOUT ${timeout_seconds}
+        LABELS "e2e;docker;api"
+    )
+  endfunction()
+
   add_test(
     NAME DeliveryOptimizerRoutingSmokeTest.OsrmAndVroom
     COMMAND
@@ -82,8 +183,66 @@ if(DOCKER_PROGRAM)
   set_tests_properties(
     DeliveryOptimizerRoutingSmokeTest.OsrmAndVroom
     PROPERTIES
-      DISABLED TRUE
       RUN_SERIAL TRUE
       TIMEOUT 1800
+      DISABLED TRUE
+      LABELS "e2e;docker;routing;smoke"
+  )
+
+  deliveryoptimizer_add_docker_e2e_test(
+    DeliveryOptimizerE2ETest.OsrmNearestReturnsOk
+    osrm_nearest_returns_ok_e2e_test.sh
+    1800
+  )
+  deliveryoptimizer_add_docker_e2e_test(
+    DeliveryOptimizerE2ETest.VroomHelpIsAvailable
+    vroom_help_is_available_e2e_test.sh
+    1800
+  )
+  deliveryoptimizer_add_docker_api_e2e_test(
+    DeliveryOptimizerE2ETest.HealthEndpointReturnsOk
+    health_endpoint_returns_ok_e2e_test.sh
+    1800
+  )
+  deliveryoptimizer_add_docker_api_e2e_test(
+    DeliveryOptimizerE2ETest.OptimizeValidQueryReturnsSummary
+    optimize_valid_query_returns_summary_e2e_test.sh
+    1800
+  )
+  deliveryoptimizer_add_docker_api_e2e_test(
+    DeliveryOptimizerE2ETest.OptimizeRejectsNegativeDeliveries
+    optimize_rejects_negative_deliveries_e2e_test.sh
+    1800
+  )
+  deliveryoptimizer_add_docker_api_e2e_test(
+    DeliveryOptimizerE2ETest.OptimizeRejectsExcessiveDeliveries
+    optimize_rejects_excessive_deliveries_e2e_test.sh
+    1800
+  )
+
+  deliveryoptimizer_add_docker_api_e2e_test(
+    DeliveryOptimizerE2ETest.OsrmProxyNearestReturnsOk
+    osrm_proxy_nearest_returns_ok_e2e_test.sh
+    2400
+  )
+  deliveryoptimizer_add_docker_api_e2e_test(
+    DeliveryOptimizerE2ETest.OsrmProxyBlocksTileService
+    osrm_proxy_blocks_tile_service_e2e_test.sh
+    2400
+  )
+  deliveryoptimizer_add_docker_api_e2e_test(
+    DeliveryOptimizerE2ETest.DeliveriesOptimizeValidPayloadReturnsRoutingResponse
+    deliveries_optimize_valid_payload_returns_routing_response_e2e_test.sh
+    2400
+  )
+  deliveryoptimizer_add_docker_api_e2e_test(
+    DeliveryOptimizerE2ETest.DeliveriesOptimizeInvalidPayloadReturnsValidationError
+    deliveries_optimize_invalid_payload_returns_validation_error_e2e_test.sh
+    2400
+  )
+  deliveryoptimizer_add_docker_api_e2e_test(
+    DeliveryOptimizerE2ETest.DeliveriesOptimizeMalformedJsonReturnsParseError
+    deliveries_optimize_malformed_json_returns_parse_error_e2e_test.sh
+    2400
   )
 endif()
