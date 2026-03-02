@@ -124,8 +124,26 @@ deliveryoptimizer_add_local_http_test(
   "${DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS}"
 )
 deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiRegressionTest.DeliveriesOptimizeRejectsInvalidVehicleTimeWindow
+  deliveries_optimize_rejects_invalid_vehicle_time_window_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
   DeliveryOptimizerApiRegressionTest.DeliveriesOptimizePreservesJobTimeWindows
   deliveries_optimize_preserves_job_time_windows_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiRegressionTest.DeliveriesOptimizeRejectsInvalidJobTimeWindows
+  deliveries_optimize_rejects_invalid_job_time_windows_test.sh
+  30
+  "${DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS}"
+)
+deliveryoptimizer_add_local_http_test(
+  DeliveryOptimizerApiRegressionTest.DeliveriesOptimizeRejectsEmptyJobTimeWindows
+  deliveries_optimize_rejects_empty_job_time_windows_test.sh
   30
   "${DELIVERYOPTIMIZER_LOCAL_API_REGRESSION_LABELS}"
 )

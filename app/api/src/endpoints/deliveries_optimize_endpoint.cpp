@@ -1,5 +1,8 @@
 #include "deliveryoptimizer/api/endpoints/deliveries_optimize_endpoint.hpp"
 
+#include <chrono>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <drogon/drogon.h>
 #include <filesystem>
@@ -25,10 +28,19 @@ constexpr std::string_view kDefaultVroomHost = "osrm";
 constexpr std::string_view kDefaultVroomPort = "5001";
 constexpr std::string_view kDefaultVroomTimeoutSeconds = "30";
 constexpr int kDefaultJobServiceSeconds = 300;
+constexpr double kMinLongitude = -180.0;
+constexpr double kMaxLongitude = 180.0;
+constexpr double kMinLatitude = -90.0;
+constexpr double kMaxLatitude = 90.0;
 
 struct Coordinate {
   double lon;
   double lat;
+};
+
+struct TimeWindow {
+  std::chrono::sys_seconds start;
+  std::chrono::sys_seconds end;
 };
 
 struct VehicleInput {
@@ -36,6 +48,7 @@ struct VehicleInput {
   int capacity;
   std::optional<Coordinate> start;
   std::optional<Coordinate> end;
+  std::optional<TimeWindow> time_window;
 };
 
 struct JobInput {
@@ -44,6 +57,7 @@ struct JobInput {
   double lat;
   int demand;
   int service;
+  std::optional<std::vector<TimeWindow>> time_windows;
 };
 
 struct OptimizeRequestInput {
@@ -125,7 +139,14 @@ void AddValidationIssue(Json::Value& issues, const std::string_view field,
     return std::nullopt;
   }
 
-  return Coordinate{.lon = value[0].asDouble(), .lat = value[1].asDouble()};
+  const double lon = value[0].asDouble();
+  const double lat = value[1].asDouble();
+  if (!std::isfinite(lon) || !std::isfinite(lat) || lon < kMinLongitude || lon > kMaxLongitude ||
+      lat < kMinLatitude || lat > kMaxLatitude) {
+    return std::nullopt;
+  }
+
+  return Coordinate{.lon = lon, .lat = lat};
 }
 
 [[nodiscard]] std::optional<int> ParseBoundedInt(const Json::Value& value, const int min_value) {
@@ -150,6 +171,67 @@ void AddValidationIssue(Json::Value& issues, const std::string_view field,
   }
 
   return std::nullopt;
+}
+
+[[nodiscard]] std::optional<std::chrono::sys_seconds>
+ParseNonNegativeEpochSeconds(const Json::Value& value) {
+  if (value.isInt64()) {
+    const Json::Int64 parsed = value.asInt64();
+    if (parsed < 0) {
+      return std::nullopt;
+    }
+
+    return std::chrono::sys_seconds{std::chrono::seconds{static_cast<std::int64_t>(parsed)}};
+  }
+
+  if (value.isUInt64()) {
+    const Json::UInt64 parsed = value.asUInt64();
+    if (parsed > static_cast<Json::UInt64>(std::numeric_limits<std::int64_t>::max())) {
+      return std::nullopt;
+    }
+
+    return std::chrono::sys_seconds{
+        std::chrono::seconds{static_cast<std::int64_t>(parsed)},
+    };
+  }
+
+  return std::nullopt;
+}
+
+[[nodiscard]] std::optional<TimeWindow> ParseTimeWindow(const Json::Value& value) {
+  if (!value.isArray() || value.size() != 2U) {
+    return std::nullopt;
+  }
+
+  const auto parsed_start = ParseNonNegativeEpochSeconds(value[0]);
+  const auto parsed_end = ParseNonNegativeEpochSeconds(value[1]);
+  if (!parsed_start.has_value() || !parsed_end.has_value() ||
+      parsed_end.value() <= parsed_start.value()) {
+    return std::nullopt;
+  }
+
+  return TimeWindow{
+      .start = parsed_start.value(),
+      .end = parsed_end.value(),
+  };
+}
+
+[[nodiscard]] std::optional<std::vector<TimeWindow>> ParseTimeWindows(const Json::Value& value) {
+  if (!value.isArray() || value.size() == 0U) {
+    return std::nullopt;
+  }
+
+  std::vector<TimeWindow> windows;
+  windows.reserve(value.size());
+  for (Json::ArrayIndex index = 0U; index < value.size(); ++index) {
+    const auto parsed_window = ParseTimeWindow(value[index]);
+    if (!parsed_window.has_value()) {
+      return std::nullopt;
+    }
+    windows.push_back(parsed_window.value());
+  }
+
+  return windows;
 }
 
 [[nodiscard]] std::optional<Json::UInt64> ParsePositiveId(const Json::Value& value) {
@@ -182,11 +264,13 @@ ParseVehicle(const Json::Value& vehicle, const std::string_view base_field, Json
   const Json::Value& capacity = vehicle["capacity"];
   const Json::Value& start = vehicle["start"];
   const Json::Value& end = vehicle["end"];
+  const Json::Value& time_window = vehicle["time_window"];
 
   bool valid_vehicle = true;
   std::string external_id;
   std::optional<Coordinate> start_coordinate;
   std::optional<Coordinate> end_coordinate;
+  std::optional<TimeWindow> vehicle_time_window;
 
   if (!vehicle_id.isString() || vehicle_id.asString().empty()) {
     AddValidationIssue(issues, std::string{base_field} + ".id", "must be a non-empty string.");
@@ -220,6 +304,15 @@ ParseVehicle(const Json::Value& vehicle, const std::string_view base_field, Json
     }
   }
 
+  if (vehicle.isMember("time_window")) {
+    vehicle_time_window = ParseTimeWindow(time_window);
+    if (!vehicle_time_window.has_value()) {
+      AddValidationIssue(issues, std::string{base_field} + ".time_window",
+                         "must be an array [start, end] with non-negative integer values and end > start.");
+      valid_vehicle = false;
+    }
+  }
+
   if (!valid_vehicle) {
     return std::nullopt;
   }
@@ -227,7 +320,8 @@ ParseVehicle(const Json::Value& vehicle, const std::string_view base_field, Json
   return VehicleInput{.external_id = std::move(external_id),
                       .capacity = parsed_capacity.value(),
                       .start = start_coordinate,
-                      .end = end_coordinate};
+                      .end = end_coordinate,
+                      .time_window = vehicle_time_window};
 }
 
 [[nodiscard]] std::optional<JobInput>
@@ -240,6 +334,7 @@ ParseJob(const Json::Value& job, const std::string_view base_field, Json::Value&
   const Json::Value& job_id = job["id"];
   const Json::Value& location = job["location"];
   const Json::Value& demand = job["demand"];
+  const Json::Value& time_windows = job["time_windows"];
 
   bool valid_job = true;
   std::string external_id;
@@ -264,6 +359,7 @@ ParseJob(const Json::Value& job, const std::string_view base_field, Json::Value&
   }
 
   int parsed_service = kDefaultJobServiceSeconds;
+  std::optional<std::vector<TimeWindow>> parsed_time_windows;
   if (job.isMember("service")) {
     const auto parsed_service_value = ParseBoundedInt(job["service"], 0);
     if (!parsed_service_value.has_value()) {
@@ -275,6 +371,15 @@ ParseJob(const Json::Value& job, const std::string_view base_field, Json::Value&
     }
   }
 
+  if (job.isMember("time_windows")) {
+    parsed_time_windows = ParseTimeWindows(time_windows);
+    if (!parsed_time_windows.has_value()) {
+      AddValidationIssue(issues, std::string{base_field} + ".time_windows",
+                         "must be an array of [start, end] pairs with non-negative integer values and end > start.");
+      valid_job = false;
+    }
+  }
+
   if (!valid_job) {
     return std::nullopt;
   }
@@ -283,7 +388,8 @@ ParseJob(const Json::Value& job, const std::string_view base_field, Json::Value&
                   .lon = parsed_location->lon,
                   .lat = parsed_location->lat,
                   .demand = parsed_demand.value(),
-                  .service = parsed_service};
+                  .service = parsed_service,
+                  .time_windows = std::move(parsed_time_windows)};
 }
 
 void ParseDepot(const Json::Value& root, OptimizeRequestInput& parsed_input, Json::Value& issues) {
@@ -380,6 +486,21 @@ void ParseJobs(const Json::Value& root, OptimizeRequestInput& parsed_input, Json
   return values;
 }
 
+[[nodiscard]] Json::Value BuildTimeWindowArray(const TimeWindow& time_window) {
+  Json::Value values{Json::arrayValue};
+  values.append(static_cast<Json::Int64>(time_window.start.time_since_epoch().count()));
+  values.append(static_cast<Json::Int64>(time_window.end.time_since_epoch().count()));
+  return values;
+}
+
+[[nodiscard]] Json::Value BuildTimeWindowsArray(const std::vector<TimeWindow>& time_windows) {
+  Json::Value values{Json::arrayValue};
+  for (const auto& time_window : time_windows) {
+    values.append(BuildTimeWindowArray(time_window));
+  }
+  return values;
+}
+
 [[nodiscard]] Json::Value BuildVroomInput(const OptimizeRequestInput& input) {
   Json::Value payload{Json::objectValue};
   payload["jobs"] = Json::Value{Json::arrayValue};
@@ -393,6 +514,9 @@ void ParseJobs(const Json::Value& root, OptimizeRequestInput& parsed_input, Json
     job["amount"] = BuildUnitArray(job_input.demand);
     job["service"] = job_input.service;
     job["description"] = job_input.external_id;
+    if (job_input.time_windows.has_value()) {
+      job["time_windows"] = BuildTimeWindowsArray(job_input.time_windows.value());
+    }
     payload["jobs"].append(job);
   }
 
@@ -412,6 +536,9 @@ void ParseJobs(const Json::Value& root, OptimizeRequestInput& parsed_input, Json
     vehicle["end"] = BuildLocation(end.lon, end.lat);
     vehicle["capacity"] = BuildUnitArray(vehicle_input.capacity);
     vehicle["description"] = vehicle_input.external_id;
+    if (vehicle_input.time_window.has_value()) {
+      vehicle["time_window"] = BuildTimeWindowArray(vehicle_input.time_window.value());
+    }
     payload["vehicles"].append(vehicle);
   }
 
