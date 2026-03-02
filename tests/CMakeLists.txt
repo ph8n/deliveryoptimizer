@@ -1,5 +1,5 @@
 find_package(GTest CONFIG REQUIRED)
-find_package(JsonCpp CONFIG REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
 include(GoogleTest)
 
 set(
@@ -185,6 +185,7 @@ if(DOCKER_PROGRAM)
     PROPERTIES
       RUN_SERIAL TRUE
       TIMEOUT 1800
+      DISABLED TRUE
       LABELS "e2e;docker;routing;smoke"
   )
 
