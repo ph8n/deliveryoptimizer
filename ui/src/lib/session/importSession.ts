@@ -1,7 +1,6 @@
 import { ZodError } from "zod"
 import type { OptimizeRequest } from "../types/optimize.types"
 import { parseSessionSaveFile } from "../validation/session.schema"
-import { sanitizeOptimizeRequest } from "../validation/json-sanitization"
 
 type LoadSessionCallbacks = {
   onSuccess: (state: OptimizeRequest) => void
@@ -63,8 +62,7 @@ export function loadSessionFromFile(
         return
       }
 
-      const cleanState = sanitizeOptimizeRequest(saveFile.data)
-      onSuccess(cleanState)
+      onSuccess(saveFile.data)
     } finally {
       finish()
     }
