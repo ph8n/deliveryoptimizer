@@ -14,8 +14,7 @@
       "binaryDir": "${sourceDir}/build/dev",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
-        "Drogon_DIR": "/usr/lib/x86_64-linux-gnu/cmake/Drogon"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true
       }
     }
   ],
