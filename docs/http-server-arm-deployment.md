@@ -8,6 +8,10 @@ This document describes the deployment assets for the C++ Drogon HTTP server (`d
 - `deploy/compose/docker-compose.arm64.yml`: Compose service definition.
 - `deploy/env/http-server.arm64.env`: Default ARM runtime/build settings.
 
+Port configuration defaults to `8080` for both the host mapping and the app listen port.
+Use `DELIVERYOPTIMIZER_HOST_PORT` to change the host-facing port and `DELIVERYOPTIMIZER_PORT` to
+change the port the API binds inside the container.
+
 ## Run on ARM host
 
 From the repository root:

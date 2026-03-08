@@ -76,6 +76,9 @@ ctest --preset conan-release --output-on-failure
 ./build/build/Release/app/api/deliveryoptimizer-api
 ```
 
+Optional: override the listen port with `DELIVERYOPTIMIZER_PORT`, for example
+`DELIVERYOPTIMIZER_PORT=9090 ./build/build/Release/app/api/deliveryoptimizer-api`.
+
 In another terminal:
 
 ```bash

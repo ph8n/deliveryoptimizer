@@ -70,6 +70,7 @@ RUN bash -euo pipefail -c '\
 FROM --platform=$TARGETPLATFORM ubuntu:${UBUNTU_VERSION} AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LD_LIBRARY_PATH=/opt/runtime-libs
+ENV DELIVERYOPTIMIZER_PORT=8080
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
@@ -85,6 +86,6 @@ COPY --from=builder /tmp/runtime-root/opt/runtime-libs/ /opt/runtime-libs/
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD curl --fail --silent http://127.0.0.1:8080/health >/dev/null || exit 1
+  CMD curl --fail --silent "http://127.0.0.1:${DELIVERYOPTIMIZER_PORT}/health" >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/local/bin/deliveryoptimizer-api"]

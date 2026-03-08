@@ -1,11 +1,50 @@
 #include "deliveryoptimizer/adapters/routing_facade.hpp"
 
+#include <charconv>
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <drogon/drogon.h>
+#include <iostream>
+#include <optional>
+#include <string_view>
+#include <system_error>
 #include <thread>
 #include <utility>
 
+namespace {
+
+constexpr std::uint16_t kDefaultPort = 8080;
+
+[[nodiscard]] std::optional<std::uint16_t> ResolveListenPort() {
+  const char* raw_port = std::getenv("DELIVERYOPTIMIZER_PORT");
+  if (raw_port == nullptr || raw_port[0] == '\0') {
+    return kDefaultPort;
+  }
+
+  const std::string_view port_text(raw_port);
+  int parsed_port = 0;
+  const auto [end_ptr, error] =
+      std::from_chars(port_text.data(), port_text.data() + port_text.size(), parsed_port);
+
+  if (error != std::errc{} || end_ptr != port_text.data() + port_text.size() || parsed_port < 1 ||
+      parsed_port > 65535) {
+    std::cerr << "Invalid DELIVERYOPTIMIZER_PORT='" << raw_port
+              << "'. Expected an integer in the range 1..65535.\n";
+    return std::nullopt;
+  }
+
+  return static_cast<std::uint16_t>(parsed_port);
+}
+
+} // namespace
+
 int main() {
+  const auto port = ResolveListenPort();
+  if (!port.has_value()) {
+    return 1;
+  }
+
   drogon::app().registerHandler(
       "/health", [](const drogon::HttpRequestPtr& /*request*/,
                     std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
@@ -41,7 +80,7 @@ int main() {
       },
       {drogon::Post});
 
-  drogon::app().addListener("0.0.0.0", 8080);
+  drogon::app().addListener("0.0.0.0", *port);
   const unsigned int detected_threads = std::thread::hardware_concurrency();
   const unsigned int thread_count = detected_threads == 0U ? 1U : detected_threads;
   drogon::app().setThreadNum(thread_count);

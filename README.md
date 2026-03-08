@@ -1,6 +1,8 @@
 # Delivery Optimizer
 
 This branch bootstraps the C++ backend scaffold (Conan + CMake + Drogon) and keeps the Next.js UI in `app/ui`.
+Legacy Python backend files were removed in this migration branch. Contributors still using the old
+Python server should switch to `docs/cpp-local-contributor-setup.md`.
 
 ## Contributor Docs
 
@@ -18,12 +20,15 @@ This branch bootstraps the C++ backend scaffold (Conan + CMake + Drogon) and kee
 ## API (Bootstrap Stage)
 
 - `GET /health`
-- `GET /optimize?deliveries=<n>&vehicles=<n>`
+- `POST /optimize?deliveries=<n>&vehicles=<n>`
+
+This endpoint is a bootstrap placeholder. JSON request-body handling and the real optimization
+contract are intentionally deferred to `#60`.
 
 Example:
 
 ```bash
-curl -fsS "http://127.0.0.1:8080/optimize?deliveries=4&vehicles=2"
+curl -fsS -X POST "http://127.0.0.1:8080/optimize?deliveries=4&vehicles=2"
 ```
 
 ## Build (C++)
@@ -43,6 +48,8 @@ Run:
 ```bash
 ./build/build/Release/app/api/deliveryoptimizer-api
 ```
+
+The API listens on `8080` by default. Set `DELIVERYOPTIMIZER_PORT` to override it for local runs.
 
 ## UI
 
