@@ -18,12 +18,12 @@ This branch bootstraps the C++ backend scaffold (Conan + CMake + Drogon) and kee
 ## API (Bootstrap Stage)
 
 - `GET /health`
-- `GET /optimize?deliveries=<n>&vehicles=<n>`
+- `POST /optimize?deliveries=<n>&vehicles=<n>`
 
 Example:
 
 ```bash
-curl -fsS "http://127.0.0.1:8080/optimize?deliveries=4&vehicles=2"
+curl -fsS -X POST "http://127.0.0.1:8080/optimize?deliveries=4&vehicles=2"
 ```
 
 ## Build (C++)
