@@ -8,7 +8,7 @@ fi
 
 server_bin="$1"
 curl_bin="${2:-curl}"
-default_port="$((34000 + ($$ % 20000)))"
+default_port="$((35000 + ($$ % 20000)))"
 port="${DELIVERYOPTIMIZER_TEST_PORT:-${default_port}}"
 
 mktemp_file() {
@@ -54,16 +54,16 @@ if [[ "${ready}" != "true" ]]; then
 fi
 
 http_code="$("${curl_bin}" -sS -o "${response_file}" -w "%{http_code}" \
-  "http://127.0.0.1:${port}/api/v1/osrm/foobar/v1/driving/-122.4194,37.7749?number=1&generate_hints=false")"
+  "http://127.0.0.1:${port}/api/v1/osrm/trip/v1/driving/-122.4194,37.7749?roundtrip=false")"
 
 if [[ "${http_code}" != "403" ]]; then
-  echo "expected HTTP 403 for a disallowed OSRM service, got ${http_code}" >&2
+  echo "expected HTTP 403 for OSRM trip service, got ${http_code}" >&2
   cat "${response_file}" >&2 || true
   exit 1
 fi
 
 if ! grep -Eq '"error"[[:space:]]*:[[:space:]]*"OSRM service not allowed\."' "${response_file}"; then
-  echo "disallowed-service response did not contain the expected error payload" >&2
+  echo "trip-service response did not contain the expected error payload" >&2
   cat "${response_file}" >&2 || true
   exit 1
 fi
