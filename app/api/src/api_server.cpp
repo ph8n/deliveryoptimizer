@@ -2,6 +2,7 @@
 
 #include "deliveryoptimizer/api/endpoints/health_endpoint.hpp"
 #include "deliveryoptimizer/api/endpoints/optimize_endpoint.hpp"
+#include "deliveryoptimizer/api/endpoints/osrm_proxy_endpoint.hpp"
 #include "deliveryoptimizer/api/server_options.hpp"
 
 #include <drogon/drogon.h>
@@ -13,14 +14,11 @@ int RunApiServer() {
 
   RegisterHealthEndpoint(app);
   RegisterOptimizeEndpoint(app);
+  RegisterOsrmProxyEndpoint(app);
 
   const auto options = LoadServerOptionsFromEnv();
-  if (!options.has_value()) {
-    return 1;
-  }
-
-  app.addListener("0.0.0.0", options->listen_port);
-  app.setThreadNum(options->worker_threads);
+  app.addListener("0.0.0.0", options.listen_port);
+  app.setThreadNum(options.worker_threads);
   app.run();
 
   return 0;
