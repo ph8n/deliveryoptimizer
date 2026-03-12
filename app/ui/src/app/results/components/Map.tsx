@@ -16,9 +16,17 @@ export default function MapComponent({ routes }: MapComponentProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? "";
   const [map, setMap] = useState<google.maps.Map | null>(null);
 
-  const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
-    setMap(mapInstance);
-  }, []);
+  const onMapLoad = useCallback(
+    (mapInstance: google.maps.Map) => {
+      setMap(mapInstance);
+      const bounds = new google.maps.LatLngBounds();
+      routes.forEach((route) => {
+        route.stops.forEach((s) => bounds.extend({ lat: s.lat, lng: s.lng }));
+      });
+      mapInstance.fitBounds(bounds, 48);
+    },
+    [routes]
+  );
 
   const onUnmount = useCallback(() => setMap(null), []);
 
@@ -41,14 +49,14 @@ export default function MapComponent({ routes }: MapComponentProps) {
   }
 
   return (
-    <div className="w-full h-full min-h-[70vh] rounded-lg">
+    <div className="w-full h-full rounded-lg">
       <LoadScriptNext googleMapsApiKey={apiKey}>
         <GoogleMap
           center={DAVIS_CENTER}
           zoom={11}
           onLoad={onMapLoad}
           onUnmount={onUnmount}
-          mapContainerStyle={{ width: "100%", height: "100%", minHeight: "70vh" }}
+          mapContainerStyle={{ width: "100%", height: "100%" }}
         >
         {routes.map((route) => {
           const sortedStops = [...route.stops].sort((a, b) => a.sequence - b.sequence);

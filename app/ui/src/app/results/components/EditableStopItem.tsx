@@ -2,7 +2,7 @@
  // If the note is in read only mode, it displays as a static text, otherwise it provides a text area and save button
  "use client";
  
- import { useEffect, useState } from "react";
+ import { useState } from "react";
  import type { Stop } from "../types";
  
  type EditableStopItemProps = {
@@ -13,13 +13,8 @@
  
  // Declaring the component with props (the stop data, whether we're in edit mode, and function to call when user saves)
  export default function EditableStopItem({ stop, isEditMode, onSaveNote }: EditableStopItemProps) { 
-   const [draft, setDraft] = useState(stop.note ?? ""); // draft represents the current note text in the text area, starts as the stop's note or empty string if no note
- 
-  useEffect(() => {
-    const id = setTimeout(() => setDraft(stop.note ?? ""), 0); // Defer sync setState to avoid lint; when stop.note changes we update draft to match
-    return () => clearTimeout(id);
-  }, [stop.note]);
- 
+  const [draft, setDraft] = useState(stop.note ?? ""); // draft is the note text in the text area; key={stop.id} at call site resets this when the stop changes
+
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-3"> {/* Outer container for the stop row (rounded border with white background) */}
       <div className="text-xs font-medium text-zinc-800"> {/* Inner container showing the stop's sequence number and address */}
