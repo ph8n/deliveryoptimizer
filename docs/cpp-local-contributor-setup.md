@@ -33,7 +33,7 @@ The flake shell includes:
 - `clang`, `clangd`, `clang-format`, `clang-tidy`
 - `cmake`, `conan`, `ninja`, `ccache`, `pkg-config`
 - `python3`
-- Docker clients and PostgreSQL client tools for the backend/e2e stack
+- Docker and PostgreSQL tooling for the backend/e2e stack
 
 The flake shell is intentionally backend-only. Frontend Node tooling stays outside this shell.
 

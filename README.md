@@ -66,8 +66,8 @@ cmake --preset conan-release
 cmake --build --preset conan-release
 ```
 
-The dev shell is backend-focused. It includes the Docker clients used by the e2e stack, but it
-does not include frontend Node tooling.
+The dev shell is backend-focused. It includes Docker and PostgreSQL tooling used by the backend
+and e2e stack, but it does not include frontend Node tooling.
 
 ## Routing Stack (Docker)
 
